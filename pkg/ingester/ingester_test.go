@@ -7091,6 +7091,51 @@ func TestIngesterActiveSeries(t *testing.T) {
 
 				// Check tracked Prometheus metrics
 				require.NoError(t, testutil.GatherAndCompare(gatherer, strings.NewReader(expectedMetrics), metricNames...))
+
+				series, err := listActiveSeries(context.Background(), ingester.getTSDB(userID), [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "team", "a")}, {labels.MustNewMatcher(labels.MatchEqual, "team", "b")}})
+				require.NoError(t, err)
+				ts := buildSeriesSet(t, series)
+				assert.Empty(t, ts)
+			},
+		},
+		"active series for cardinality API": {
+			test: func(t *testing.T, ingester *Ingester, gatherer prometheus.Gatherer) {
+				pushWithUser(t, ingester, labelsToPush, userID, req)
+				pushWithUser(t, ingester, labelsToPush, userID2, req)
+				pushWithUser(t, ingester, labelsToPushHist, userID, reqHist)
+				pushWithUser(t, ingester, labelsToPushHist, userID2, reqHist)
+				extraSeries := [][]mimirpb.LabelAdapter{
+					{{Name: labels.MetricName, Value: "test_metric"}, {Name: "active", Value: "true"}, {Name: "team", Value: "c"}},
+					{{Name: labels.MetricName, Value: "test_metric"}, {Name: "active", Value: "false"}, {Name: "team", Value: "c"}},
+				}
+				pushWithUser(t, ingester, extraSeries, userID, req)
+
+				// Update active series for metrics check.
+				ingester.updateActiveSeries(time.Now())
+
+				series, err := listActiveSeries(context.Background(), ingester.getTSDB(userID), [][]*labels.Matcher{
+					{labels.MustNewMatcher(labels.MatchEqual, "team", "a"), labels.MustNewMatcher(labels.MatchEqual, "bool", "true")},
+					{labels.MustNewMatcher(labels.MatchEqual, "team", "c")},
+				})
+				require.NoError(t, err)
+
+				var labelSets []labels.Labels
+				labelSets = buildSeriesSet(t, series)
+				// Expect 2 series for team="a" and 2 series for team="c"
+				assert.Len(t, labelSets, 4)
+				for _, lbls := range labelSets {
+					assert.Contains(t, []string{"a", "c"}, lbls.Get("team"))
+				}
+
+				// Fast-forward to make series stale
+				ingester.updateActiveSeries(time.Now().Add(defaultIngesterTestConfig(t).ActiveSeriesMetrics.IdleTimeout))
+
+				series, err = listActiveSeries(context.Background(), ingester.getTSDB(userID), [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "team", "a")}})
+				require.NoError(t, err)
+				labelSets = buildSeriesSet(t, series)
+
+				// No more series should be active
+				assert.Empty(t, labelSets)
 			},
 		},
 	}
@@ -9002,4 +9047,14 @@ func checkErrorWithStatus(t *testing.T, err error, expectedErr error) {
 	errWithStatus, ok := err.(errorWithStatus)
 	require.True(t, ok)
 	require.True(t, errWithStatus.equals(expectedErr))
+}
+
+func buildSeriesSet(t *testing.T, series *activeseries.Series) []labels.Labels {
+	var labelSets []labels.Labels
+	for series.Next() {
+		l := series.At()
+		require.NoError(t, series.Err())
+		labelSets = append(labelSets, l)
+	}
+	return labelSets
 }
