@@ -166,6 +166,20 @@ func FromLabelNamesRequest(req *LabelNamesRequest) (int64, int64, []*labels.Matc
 	return req.StartTimestampMs, req.EndTimestampMs, matchers, nil
 }
 
+func ToActiveSeriesRequest(matcherSet [][]*labels.Matcher) (*ActiveSeriesRequest, error) {
+	res := &ActiveSeriesRequest{
+		MatchersSet: make([]*LabelMatchers, 0, len(matcherSet)),
+	}
+	for _, matchers := range matcherSet {
+		ms, err := ToLabelMatchers(matchers)
+		if err != nil {
+			return nil, err
+		}
+		res.MatchersSet = append(res.MatchersSet, &LabelMatchers{Matchers: ms})
+	}
+	return res, nil
+}
+
 func ToLabelMatchers(matchers []*labels.Matcher) ([]*LabelMatcher, error) {
 	result := make([]*LabelMatcher, 0, len(matchers))
 	for _, matcher := range matchers {

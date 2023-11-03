@@ -264,3 +264,62 @@ func extractCountMethod(values url.Values) (countMethod CountMethod, err error) 
 		return "", fmt.Errorf("invalid 'count_method' param '%v'. valid options are: [%s]", countMethodParams[0], strings.Join([]string{string(ActiveMethod), string(InMemoryMethod)}, ","))
 	}
 }
+
+type ActiveSeriesRequest struct {
+	MatcherSet [][]*labels.Matcher
+}
+
+func DecodeActiveSeriesRequest(r *http.Request) (*ActiveSeriesRequest, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, err
+	}
+	if len(r.Form["match[]"]) == 0 {
+		return nil, errors.New("no match[] parameter provided")
+	}
+
+	return DecodeActiveSeriesRequestFromValues(r.Form)
+}
+
+func DecodeActiveSeriesRequestFromValues(values url.Values) (*ActiveSeriesRequest, error) {
+	return parseMatchersParam(values["match[]"])
+}
+
+func parseMatchersParam(matchers []string) (*ActiveSeriesRequest, error) {
+	var matcherSet [][]*labels.Matcher
+	for _, s := range matchers {
+		matchers, err := parser.ParseMetricSelector(s)
+		if err != nil {
+			return nil, err
+		}
+		matcherSet = append(matcherSet, matchers)
+	}
+
+OUTER:
+	for _, ms := range matcherSet {
+		for _, lm := range ms {
+			if lm != nil && !lm.Matches("") {
+				continue OUTER
+			}
+		}
+		return nil, errors.New("match[] must contain at least one non-empty matcher")
+	}
+
+	return &ActiveSeriesRequest{MatcherSet: matcherSet}, nil
+}
+
+func (m *ActiveSeriesRequest) String() string {
+	b := strings.Builder{}
+
+	for _, matchers := range m.MatcherSet {
+		// Add matchers.
+		for idx, matcher := range matchers {
+			if idx > 0 {
+				b.WriteRune(stringValueSeparator)
+			}
+			b.WriteString(matcher.String())
+		}
+		b.WriteRune(stringParamSeparator)
+	}
+
+	return b.String()
+}

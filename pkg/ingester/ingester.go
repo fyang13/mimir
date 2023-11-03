@@ -1621,6 +1621,9 @@ func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream clie
 	}
 
 	series, err := listActiveSeries(ctx, db, matchers)
+	if err != nil {
+		return fmt.Errorf("error listing active series: %w", err)
+	}
 
 	resp := &client.ActiveSeriesResponse{}
 	for series.Next() {
