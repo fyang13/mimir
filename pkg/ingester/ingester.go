@@ -1607,7 +1607,7 @@ func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream clie
 		return err
 	}
 
-	matchers, err := client.FromLabelMatchers(request.GetMatchers())
+	matchers, err := client.FromLabelMatchersSet(request.GetMatchersSet())
 	if err != nil {
 		return fmt.Errorf("error parsing label matchers: %w", err)
 	}
@@ -1638,22 +1638,26 @@ func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream clie
 	return nil
 }
 
-func activeSeries(ctx context.Context, db *userTSDB, matchers []*labels.Matcher) (lbls []labels.Labels, err error) {
+func activeSeries(ctx context.Context, db *userTSDB, matchersSet [][]*labels.Matcher) (lbls []labels.Labels, err error) {
 	idx, err := db.Head().Index()
 	if err != nil {
 		return nil, fmt.Errorf("error getting index: %w", err)
-	}
-
-	postings, err := tsdb.PostingsForMatchers(ctx, idx, matchers...)
-	if err != nil {
-		return nil, fmt.Errorf("error getting postings: %w", err)
 	}
 
 	if db.activeSeries == nil {
 		return nil, fmt.Errorf("active series tracker is not initialized")
 	}
 
-	activePostingsIterator := activeseries.NewPostings(db.activeSeries, postings)
+	var postingsSet []index.Postings
+	for _, matchers := range matchersSet {
+		postings, err := tsdb.PostingsForMatchers(ctx, idx, matchers...)
+		if err != nil {
+			return nil, fmt.Errorf("error getting postings: %w", err)
+		}
+		postingsSet = append(postingsSet, postings)
+	}
+
+	activePostingsIterator := activeseries.NewPostings(db.activeSeries, index.Merge(ctx, postingsSet...))
 
 	buffer := labels.NewScratchBuilder(10)
 	for activePostingsIterator.Next() {

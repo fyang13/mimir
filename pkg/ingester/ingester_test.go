@@ -7092,7 +7092,7 @@ func TestIngesterActiveSeries(t *testing.T) {
 				// Check tracked Prometheus metrics
 				require.NoError(t, testutil.GatherAndCompare(gatherer, strings.NewReader(expectedMetrics), metricNames...))
 
-				ts, err := activeSeries(context.Background(), ingester.getTSDB(userID), []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "team", "a")})
+				ts, err := activeSeries(context.Background(), ingester.getTSDB(userID), [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "team", "a")}, {labels.MustNewMatcher(labels.MatchEqual, "team", "b")}})
 				require.NoError(t, err)
 				assert.Empty(t, ts)
 			},
@@ -7103,6 +7103,11 @@ func TestIngesterActiveSeries(t *testing.T) {
 				pushWithUser(t, ingester, labelsToPush, userID2, req)
 				pushWithUser(t, ingester, labelsToPushHist, userID, reqHist)
 				pushWithUser(t, ingester, labelsToPushHist, userID2, reqHist)
+				extraSeries := [][]mimirpb.LabelAdapter{
+					{{Name: labels.MetricName, Value: "test_metric"}, {Name: "active", Value: "true"}, {Name: "team", Value: "c"}},
+					{{Name: labels.MetricName, Value: "test_metric"}, {Name: "active", Value: "false"}, {Name: "team", Value: "c"}},
+				}
+				pushWithUser(t, ingester, extraSeries, userID, req)
 
 				// Update active series for metrics check.
 				ingester.updateActiveSeries(time.Now())
@@ -7110,24 +7115,30 @@ func TestIngesterActiveSeries(t *testing.T) {
 				labelSets, err := activeSeries(
 					context.Background(),
 					ingester.getTSDB(userID),
-					[]*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "team", "a")},
+					[][]*labels.Matcher{
+						{labels.MustNewMatcher(labels.MatchEqual, "team", "a"), labels.MustNewMatcher(labels.MatchEqual, "bool", "true")},
+						{labels.MustNewMatcher(labels.MatchEqual, "team", "c")},
+					},
 				)
-
 				require.NoError(t, err)
-				assert.NotEmpty(t, labelSets)
 
+				// Expect 2 series for team="a" and 2 series for team="c"
+				assert.Len(t, labelSets, 4)
 				for _, lbls := range labelSets {
-					assert.Equal(t, "a", lbls.Get("team"))
+					assert.Contains(t, []string{"a", "c"}, lbls.Get("team"))
 				}
 
-				ingester.updateActiveSeries(time.Now().Add(30 * time.Minute))
+				// Fast-forward to make series stale
+				ingester.updateActiveSeries(time.Now().Add(defaultIngesterTestConfig(t).ActiveSeriesMetrics.IdleTimeout))
 
 				labelSets, err = activeSeries(
 					context.Background(),
 					ingester.getTSDB(userID),
-					[]*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "team", "a")},
+					[][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "team", "a")}},
 				)
 				require.NoError(t, err)
+
+				// No more series should be active
 				assert.Empty(t, labelSets)
 			},
 		},
