@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/dskit/user"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -784,6 +785,98 @@ func TestLabelValuesCardinalityHandler_DistributorError(t *testing.T) {
 			require.Equal(t, testData.expectedHTTPBody, bodyErrMessage)
 		})
 	}
+}
+
+func TestMeStupid(t *testing.T) {
+	data := url.Values{}
+	data.Add("match[]", "up")
+	data.Add("match[]", `process_start_time_seconds{job="prometheus"}`)
+	request, err := http.NewRequestWithContext(context.Background(), "POST", "/active_series", strings.NewReader(data.Encode()))
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	require.NoError(t, err)
+
+	err = request.ParseForm()
+	require.NoError(t, err)
+
+	require.NotEmpty(t, request.Form)
+	fmt.Println(request.Form)
+}
+
+func TestActiveSeriesCardinalityHandler(t *testing.T) {
+	tests := []struct {
+		name                 string
+		requestParams        map[string][]string
+		expectMatcherSetSize int
+		expectError          bool
+	}{
+		{
+			name:        "should error on missing match[] param",
+			expectError: true,
+		},
+		{
+			name:                 "one matcher",
+			requestParams:        map[string][]string{"match[]": {"up"}},
+			expectMatcherSetSize: 1,
+		},
+		{
+			name:          "multiple matchers",
+			requestParams: map[string][]string{"match[]": {"up", `{job="prometheus"}`, `{job="mimir"}`}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			d := &mockDistributor{}
+
+			series := []labels.Labels{
+				labels.FromStrings("__name__", "up", "job", "prometheus"),
+				labels.FromStrings("__name__", "process_start_time_seconds", "job", "prometheus"),
+			}
+			d.On("ActiveSeries", mock.Anything, mock.MatchedBy(func(matcherSet [][]*labels.Matcher) bool {
+				assert.Len(t, matcherSet, test.expectMatcherSetSize)
+				return len(matcherSet) == test.expectMatcherSetSize
+			})).Return(series, nil)
+
+			handler := createEnabledHandler(t, ActiveSeriesCardinalityHandler, d)
+			ctx := user.InjectOrgID(context.Background(), "test")
+
+			data := url.Values{}
+			for key, values := range test.requestParams {
+				for _, value := range values {
+					data.Add(key, value)
+				}
+			}
+			request, err := http.NewRequestWithContext(ctx, "POST", "/active_series", strings.NewReader(data.Encode()))
+			require.NoError(t, err)
+			request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+
+			if test.expectError {
+				require.Equal(t, http.StatusBadRequest, recorder.Result().StatusCode)
+				return
+			}
+
+			require.Equal(t, http.StatusOK, recorder.Result().StatusCode)
+
+			body := recorder.Result().Body
+			defer func(body io.ReadCloser) {
+				err := body.Close()
+				if err != nil {
+					require.NoError(t, err)
+				}
+			}(body)
+			bodyContent, err := io.ReadAll(body)
+			require.NoError(t, err)
+
+			resp := activeSeriesResponse{}
+			err = json.Unmarshal(bodyContent, &resp)
+			require.NoError(t, err)
+			assert.NotEmpty(t, resp.Data)
+		})
+	}
+
 }
 
 // createEnabledHandler creates a cardinalityHandler that can be either a LabelNamesCardinalityHandler or a LabelValuesCardinalityHandler

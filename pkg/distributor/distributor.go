@@ -1771,6 +1771,77 @@ func (cm *labelValuesCardinalityConcurrentMap) toLabelValuesCardinalityResponse(
 	}
 }
 
+func (d *Distributor) ActiveSeries(ctx context.Context, matchersSet [][]*labels.Matcher) ([]labels.Labels, error) {
+	replicationSet, err := d.GetIngesters(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if replicationSet.ZoneCount() == 1 {
+		replicationSet.MaxErrors = 0
+	}
+
+	req, err := ingester_client.ToActiveSeriesRequest(matchersSet)
+	if err != nil {
+		return nil, err
+	}
+
+	ingesterQuery := func(ctx context.Context, client ingester_client.IngesterClient) ([]*mimirpb.Metric, error) {
+		stream, err := client.ActiveSeries(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		defer func() {
+			err = util.CloseAndExhaust[*ingester_client.ActiveSeriesResponse](stream)
+			if err != nil {
+				level.Warn(d.log).Log("msg", "error closing active series response stream", "err", err)
+			}
+		}()
+
+		var series []*mimirpb.Metric
+		for {
+			msg, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				break
+			} else if err != nil {
+				return nil, err
+			}
+			series = append(series, msg.Metric...)
+		}
+
+		return series, nil
+	}
+
+	responses, err := forReplicationSet(
+		ctx,
+		d,
+		replicationSet,
+		ingesterQuery,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return mergeActiveSeriesResponses(responses), nil
+}
+
+func mergeActiveSeriesResponses(responses [][]*mimirpb.Metric) []labels.Labels {
+	resultSet := make(map[labels.Labels]struct{})
+	for _, resp := range responses {
+		for _, series := range resp {
+			lbls := mimirpb.FromLabelAdaptersToLabels(series.Labels)
+			resultSet[lbls] = struct{}{}
+		}
+	}
+
+	lbls := make([]labels.Labels, 0, len(resultSet))
+	for v := range resultSet {
+		lbls = append(lbls, v)
+	}
+	return lbls
+}
+
 // approximateFromZones computes a zonal value while factoring in replication.
 // e.g. series cardinality or ingestion rate.
 func approximateFromZones[T ~float64 | ~uint64](zoneCount int, replicationFactor int, seriesCountMapByZone map[string]T) T {
