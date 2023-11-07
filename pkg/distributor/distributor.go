@@ -1813,12 +1813,7 @@ func (d *Distributor) ActiveSeries(ctx context.Context, matchersSet [][]*labels.
 		return series, nil
 	}
 
-	responses, err := forReplicationSet(
-		ctx,
-		d,
-		replicationSet,
-		ingesterQuery,
-	)
+	responses, err := forReplicationSet(ctx, d, replicationSet, ingesterQuery)
 	if err != nil {
 		return nil, err
 	}

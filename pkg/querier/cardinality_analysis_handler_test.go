@@ -787,21 +787,6 @@ func TestLabelValuesCardinalityHandler_DistributorError(t *testing.T) {
 	}
 }
 
-func TestMeStupid(t *testing.T) {
-	data := url.Values{}
-	data.Add("match[]", "up")
-	data.Add("match[]", `process_start_time_seconds{job="prometheus"}`)
-	request, err := http.NewRequestWithContext(context.Background(), "POST", "/active_series", strings.NewReader(data.Encode()))
-	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	require.NoError(t, err)
-
-	err = request.ParseForm()
-	require.NoError(t, err)
-
-	require.NotEmpty(t, request.Form)
-	fmt.Println(request.Form)
-}
-
 func TestActiveSeriesCardinalityHandler(t *testing.T) {
 	tests := []struct {
 		name                 string

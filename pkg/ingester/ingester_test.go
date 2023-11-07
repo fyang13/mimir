@@ -7128,7 +7128,7 @@ func TestIngesterActiveSeries(t *testing.T) {
 				}
 
 				// Fast-forward to make series stale
-				ingester.updateActiveSeries(time.Now().Add(defaultIngesterTestConfig(t).ActiveSeriesMetrics.IdleTimeout))
+				ingester.updateActiveSeries(time.Now().Add(ingester.cfg.ActiveSeriesMetrics.IdleTimeout))
 
 				series, err = listActiveSeries(context.Background(), ingester.getTSDB(userID), [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "team", "a")}})
 				require.NoError(t, err)
