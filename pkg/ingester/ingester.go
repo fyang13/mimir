@@ -1649,7 +1649,7 @@ func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream clie
 	return nil
 }
 
-func listActiveSeries(ctx context.Context, db *userTSDB, matchersSet [][]*labels.Matcher) (series *activeseries.Series, err error) {
+func listActiveSeries(ctx context.Context, db *userTSDB, matchersSet [][]*labels.Matcher) (series *Series, err error) {
 	idx, err := db.Head().Index()
 	if err != nil {
 		return nil, fmt.Errorf("error getting index: %w", err)
@@ -1668,7 +1668,7 @@ func listActiveSeries(ctx context.Context, db *userTSDB, matchersSet [][]*labels
 		postingsSet = append(postingsSet, postings)
 	}
 
-	return activeseries.NewSeries(activeseries.NewPostings(db.activeSeries, index.Merge(ctx, postingsSet...)), idx), nil
+	return NewSeries(activeseries.NewPostings(db.activeSeries, index.Merge(ctx, postingsSet...)), idx), nil
 }
 
 func createUserStats(db *userTSDB, req *client.UserStatsRequest) (*client.UserStatsResponse, error) {

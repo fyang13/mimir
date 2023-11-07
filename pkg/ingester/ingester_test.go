@@ -9049,7 +9049,7 @@ func checkErrorWithStatus(t *testing.T, err error, expectedErr error) {
 	require.True(t, errWithStatus.equals(expectedErr))
 }
 
-func buildSeriesSet(t *testing.T, series *activeseries.Series) []labels.Labels {
+func buildSeriesSet(t *testing.T, series *Series) []labels.Labels {
 	var labelSets []labels.Labels
 	for series.Next() {
 		l := series.At()
