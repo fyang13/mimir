@@ -4,13 +4,13 @@ package ingester
 
 import (
 	"github.com/pkg/errors"
+	"testing"
+
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"testing"
-
-	"github.com/prometheus/prometheus/storage"
 )
 
 func TestSeries(t *testing.T) {
