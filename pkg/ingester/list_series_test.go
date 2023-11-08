@@ -3,9 +3,9 @@
 package ingester
 
 import (
-	"github.com/pkg/errors"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/index"

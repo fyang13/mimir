@@ -1,15 +1,19 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package ingester
 
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/grafana/dskit/user"
-	"github.com/grafana/mimir/pkg/ingester/client"
-	"github.com/grafana/mimir/pkg/mimirpb"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
+
+	"github.com/grafana/mimir/pkg/ingester/client"
+	"github.com/grafana/mimir/pkg/mimirpb"
 )
 
 func TestIngester_ActiveSeries(t *testing.T) {
