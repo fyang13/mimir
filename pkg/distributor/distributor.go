@@ -1771,7 +1771,9 @@ func (cm *labelValuesCardinalityConcurrentMap) toLabelValuesCardinalityResponse(
 	}
 }
 
-func (d *Distributor) ActiveSeries(ctx context.Context, matchersSet [][]*labels.Matcher) ([]labels.Labels, error) {
+// ActiveSeries queries the ingester replication set for active series matching
+// the given selector. It combines and deduplicates the results.
+func (d *Distributor) ActiveSeries(ctx context.Context, matchers []*labels.Matcher) ([]labels.Labels, error) {
 	replicationSet, err := d.GetIngesters(ctx)
 	if err != nil {
 		return nil, err
@@ -1781,7 +1783,7 @@ func (d *Distributor) ActiveSeries(ctx context.Context, matchersSet [][]*labels.
 		replicationSet.MaxErrors = 0
 	}
 
-	req, err := ingester_client.ToActiveSeriesRequest(matchersSet)
+	req, err := ingester_client.ToActiveSeriesRequest(matchers)
 	if err != nil {
 		return nil, err
 	}
@@ -1799,6 +1801,7 @@ func (d *Distributor) ActiveSeries(ctx context.Context, matchersSet [][]*labels.
 			}
 		}()
 
+		// TODO: Don't accumulate the results here but stream them into mergeActiveSeriesResponses instead.
 		var series []*mimirpb.Metric
 		for {
 			msg, err := stream.Recv()

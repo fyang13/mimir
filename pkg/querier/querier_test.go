@@ -1050,7 +1050,7 @@ func (m *errDistributor) LabelValuesCardinality(context.Context, []model.LabelNa
 	return 0, nil, errDistributorError
 }
 
-func (m *errDistributor) ActiveSeries(context.Context, [][]*labels.Matcher) ([]labels.Labels, error) {
+func (m *errDistributor) ActiveSeries(context.Context, []*labels.Matcher) ([]labels.Labels, error) {
 	return nil, errDistributorError
 }
 
@@ -1088,7 +1088,7 @@ func (d *emptyDistributor) LabelValuesCardinality(context.Context, []model.Label
 	return 0, nil, nil
 }
 
-func (d *emptyDistributor) ActiveSeries(context.Context, [][]*labels.Matcher) ([]labels.Labels, error) {
+func (d *emptyDistributor) ActiveSeries(context.Context, []*labels.Matcher) ([]labels.Labels, error) {
 	return nil, nil
 }
 

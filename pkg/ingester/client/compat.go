@@ -166,18 +166,12 @@ func FromLabelNamesRequest(req *LabelNamesRequest) (int64, int64, []*labels.Matc
 	return req.StartTimestampMs, req.EndTimestampMs, matchers, nil
 }
 
-func ToActiveSeriesRequest(matcherSet [][]*labels.Matcher) (*ActiveSeriesRequest, error) {
-	res := &ActiveSeriesRequest{
-		MatchersSet: make([]*LabelMatchers, 0, len(matcherSet)),
+func ToActiveSeriesRequest(matchers []*labels.Matcher) (*ActiveSeriesRequest, error) {
+	ms, err := ToLabelMatchers(matchers)
+	if err != nil {
+		return nil, err
 	}
-	for _, matchers := range matcherSet {
-		ms, err := ToLabelMatchers(matchers)
-		if err != nil {
-			return nil, err
-		}
-		res.MatchersSet = append(res.MatchersSet, &LabelMatchers{Matchers: ms})
-	}
-	return res, nil
+	return &ActiveSeriesRequest{Matchers: ms}, nil
 }
 
 func ToLabelMatchers(matchers []*labels.Matcher) ([]*LabelMatcher, error) {
@@ -226,18 +220,6 @@ func FromLabelMatchers(matchers []*LabelMatcher) ([]*labels.Matcher, error) {
 			return nil, err
 		}
 		result = append(result, matcher)
-	}
-	return result, nil
-}
-
-func FromLabelMatchersSet(matchersSet []*LabelMatchers) ([][]*labels.Matcher, error) {
-	result := make([][]*labels.Matcher, 0, len(matchersSet))
-	for _, matchers := range matchersSet {
-		ms, err := FromLabelMatchers(matchers.Matchers)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, ms)
 	}
 	return result, nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/mimir/pkg/mimirpb"
 )
 
+// mergeActiveSeriesResponses takes a set of responses from different ingesters and merges them into a single set.
 func mergeActiveSeriesResponses(responses [][]*mimirpb.Metric) []labels.Labels {
 	type resultIndex struct {
 		response int

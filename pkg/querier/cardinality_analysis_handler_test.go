@@ -795,18 +795,23 @@ func TestActiveSeriesCardinalityHandler(t *testing.T) {
 		expectError          bool
 	}{
 		{
-			name:        "should error on missing match[] param",
+			name:        "should error on missing selector param",
 			expectError: true,
 		},
 		{
-			name:                 "one matcher",
-			requestParams:        map[string][]string{"match[]": {"up"}},
-			expectMatcherSetSize: 1,
+			name:          "should error on invalid selector",
+			requestParams: map[string][]string{"selector": {"-not-valid-"}},
+			expectError:   true,
 		},
 		{
-			name:                 "multiple matchers",
-			requestParams:        map[string][]string{"match[]": {"up", `{job="prometheus"}`, `{job="mimir"}`}},
-			expectMatcherSetSize: 3,
+			name:          "should error on multiple selectors",
+			requestParams: map[string][]string{"selector": {"a", "b"}},
+			expectError:   true,
+		},
+		{
+			name:                 "valid selector",
+			requestParams:        map[string][]string{"selector": {`{job="prometheus"}`}},
+			expectMatcherSetSize: 1,
 		},
 	}
 
@@ -818,10 +823,7 @@ func TestActiveSeriesCardinalityHandler(t *testing.T) {
 				labels.FromStrings("__name__", "up", "job", "prometheus"),
 				labels.FromStrings("__name__", "process_start_time_seconds", "job", "prometheus"),
 			}
-			d.On("ActiveSeries", mock.Anything, mock.MatchedBy(func(matcherSet [][]*labels.Matcher) bool {
-				assert.Len(t, matcherSet, test.expectMatcherSetSize)
-				return true
-			})).Return(series, nil)
+			d.On("ActiveSeries", mock.Anything, mock.Anything).Return(series, nil)
 
 			handler := createEnabledHandler(t, ActiveSeriesCardinalityHandler, d)
 			ctx := user.InjectOrgID(context.Background(), "test")

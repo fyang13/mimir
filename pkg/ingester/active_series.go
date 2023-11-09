@@ -10,7 +10,6 @@ import (
 	"github.com/grafana/dskit/tenant"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/tsdb"
-	"github.com/prometheus/prometheus/tsdb/index"
 
 	"github.com/grafana/mimir/pkg/ingester/activeseries"
 	"github.com/grafana/mimir/pkg/ingester/client"
@@ -20,6 +19,8 @@ import (
 
 const activeSeriesMaxSizeBytes = 1 * 1024 * 1024
 
+// ActiveSeries implements the ActiveSeries RPC. It returns a stream of active
+// series that match the given matchers.
 func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream client.Ingester_ActiveSeriesServer) error {
 	if err := i.checkRunning(); err != nil {
 		return err
@@ -36,7 +37,7 @@ func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream clie
 		return err
 	}
 
-	matchers, err := client.FromLabelMatchersSet(request.GetMatchersSet())
+	matchers, err := client.FromLabelMatchers(request.GetMatchers())
 	if err != nil {
 		return fmt.Errorf("error parsing label matchers: %w", err)
 	}
@@ -76,7 +77,8 @@ func (i *Ingester) ActiveSeries(request *client.ActiveSeriesRequest, stream clie
 	return nil
 }
 
-func listActiveSeries(ctx context.Context, db *userTSDB, matchersSet [][]*labels.Matcher) (series *Series, err error) {
+// listActiveSeries returns an iterator over the active series matching the given matchers.
+func listActiveSeries(ctx context.Context, db *userTSDB, matchers []*labels.Matcher) (series *Series, err error) {
 	idx, err := db.Head().Index()
 	if err != nil {
 		return nil, fmt.Errorf("error getting index: %w", err)
@@ -86,14 +88,10 @@ func listActiveSeries(ctx context.Context, db *userTSDB, matchersSet [][]*labels
 		return nil, fmt.Errorf("active series tracker is not initialized")
 	}
 
-	var postingsSet []index.Postings
-	for _, matchers := range matchersSet {
-		postings, err := tsdb.PostingsForMatchers(ctx, idx, matchers...)
-		if err != nil {
-			return nil, fmt.Errorf("error getting postings: %w", err)
-		}
-		postingsSet = append(postingsSet, postings)
+	postings, err := tsdb.PostingsForMatchers(ctx, idx, matchers...)
+	if err != nil {
+		return nil, fmt.Errorf("error getting postings: %w", err)
 	}
 
-	return NewSeries(activeseries.NewPostings(db.activeSeries, index.Merge(ctx, postingsSet...)), idx), nil
+	return NewSeries(activeseries.NewPostings(db.activeSeries, postings), idx), nil
 }

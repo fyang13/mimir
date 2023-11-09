@@ -132,7 +132,7 @@ message ExemplarQueryRequest {
 }
 
 message ActiveSeriesRequest {
-  repeated LabelMatchers matchers_set = 1;
+  repeated LabelMatcher matchers = 1;
 }
 
 message QueryResponse {

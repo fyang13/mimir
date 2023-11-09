@@ -100,13 +100,12 @@ func ActiveSeriesCardinalityHandler(distributor Distributor, limits *validation.
 			return
 		}
 
-		res, err := distributor.ActiveSeries(ctx, req.MatcherSet)
+		res, err := distributor.ActiveSeries(ctx, req.Matchers)
 		if err != nil {
 			respondFromError(err, w)
 			return
 		}
 
-		// TODO convert to the right format
 		util.WriteJSONResponse(w, activeSeriesResponse{res})
 	})
 }

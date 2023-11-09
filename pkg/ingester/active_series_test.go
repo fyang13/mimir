@@ -52,11 +52,10 @@ func TestIngester_ActiveSeries(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get active series
-	req := &client.ActiveSeriesRequest{
-		MatchersSet: []*client.LabelMatchers{
-			{Matchers: []*client.LabelMatcher{{Name: labels.MetricName, Value: "test", Type: client.EQUAL}}},
-		},
-	}
+	req, err := client.ToActiveSeriesRequest([]*labels.Matcher{
+		labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, "test"),
+	})
+	require.NoError(t, err)
 
 	server := &mockActiveSeriesServer{ctx: ctx}
 	err = ingesterClient.ActiveSeries(req, server)
@@ -76,7 +75,7 @@ func TestIngester_ActiveSeries(t *testing.T) {
 func BenchmarkIngester_ActiveSeries(b *testing.B) {
 	const (
 		userID     = "test"
-		numSeries  = 1e6
+		numSeries  = 2e6
 		metricName = "metric_name"
 	)
 
@@ -92,7 +91,6 @@ func BenchmarkIngester_ActiveSeries(b *testing.B) {
 					labels.MetricName, metricName,
 					// Use mod prime to make label values repeat every n series
 					"mod_10", strconv.Itoa(s%(2*5)),
-					"mod_77", strconv.Itoa(s%(7*11)),
 					"mod_4199", strconv.Itoa(s%(13*17*19)))),
 				Samples: samples,
 			},
@@ -102,51 +100,21 @@ func BenchmarkIngester_ActiveSeries(b *testing.B) {
 	require.NoError(b, err)
 
 	for _, bc := range []struct {
-		name        string
-		matchersSet []*client.LabelMatchers
+		name     string
+		matchers []*client.LabelMatcher
 	}{
 		{
-			name: "single matcher, very few series",
-			matchersSet: []*client.LabelMatchers{
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "0", Type: client.EQUAL}}},
-			},
+			name:     "few series",
+			matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "0", Type: client.EQUAL}},
 		},
 		{
-			name: "single matcher, ~10% of series",
-			matchersSet: []*client.LabelMatchers{
-				{Matchers: []*client.LabelMatcher{{Name: "mod_10", Value: "0", Type: client.EQUAL}}},
-			},
-		},
-		{
-			name: "multiple matchers, very few series",
-			matchersSet: []*client.LabelMatchers{
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "0", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "1", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "2", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "3", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "4", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "5", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "6", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_4199", Value: "7", Type: client.EQUAL}}},
-			},
-		},
-		{
-			name: "multiple matchers, ~10% of series",
-			matchersSet: []*client.LabelMatchers{
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "0", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "1", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "2", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "3", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "4", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "5", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "6", Type: client.EQUAL}}},
-				{Matchers: []*client.LabelMatcher{{Name: "mod_77", Value: "7", Type: client.EQUAL}}},
-			},
+			name:     "~10% of series",
+			matchers: []*client.LabelMatcher{{Name: "mod_10", Value: "0", Type: client.EQUAL}},
 		},
 	} {
 		b.Run(bc.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				req := &client.ActiveSeriesRequest{MatchersSet: bc.matchersSet}
+				req := &client.ActiveSeriesRequest{Matchers: bc.matchers}
 				server := &mockActiveSeriesServer{ctx: ctx}
 				require.NoError(b, in.ActiveSeries(req, server))
 			}

@@ -2017,31 +2017,23 @@ func TestDistributor_ActiveSeries(t *testing.T) {
 	}
 	tests := map[string]struct {
 		shuffleShardSize            int
-		requestMatchers             [][]*labels.Matcher
+		requestMatchers             []*labels.Matcher
 		expectedSeries              []labels.Labels
 		expectedNumQueriedIngesters int
 	}{
 		"should return an empty response if no metric match": {
-			requestMatchers:             [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "unknown")}},
+			requestMatchers:             []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "unknown")},
 			expectedSeries:              []labels.Labels{},
 			expectedNumQueriedIngesters: numIngesters,
 		},
 		"should return all matching metrics": {
-			requestMatchers:             [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "test_1")}},
+			requestMatchers:             []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "test_1")},
 			expectedSeries:              []labels.Labels{pushedData[0].lbls, pushedData[1].lbls},
-			expectedNumQueriedIngesters: numIngesters,
-		},
-		"supports multiple matchers": {
-			requestMatchers: [][]*labels.Matcher{
-				{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "test_1")},
-				{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "test_2")},
-			},
-			expectedSeries:              []labels.Labels{pushedData[0].lbls, pushedData[1].lbls, pushedData[2].lbls},
 			expectedNumQueriedIngesters: numIngesters,
 		},
 		"should honour shuffle shard size": {
 			shuffleShardSize:            3,
-			requestMatchers:             [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "test_2")}},
+			requestMatchers:             []*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, model.MetricNameLabel, "test_2")},
 			expectedSeries:              []labels.Labels{pushedData[2].lbls},
 			expectedNumQueriedIngesters: 3,
 		},
@@ -4071,26 +4063,25 @@ func (i *mockIngester) ActiveSeries(_ context.Context, req *client.ActiveSeriesR
 		return nil, errFail
 	}
 
-	matchersSet, err := client.FromLabelMatchersSet(req.GetMatchersSet())
+	matchers, err := client.FromLabelMatchers(req.GetMatchers())
 	if err != nil {
 		return nil, err
 	}
 
 	results := []*client.ActiveSeriesResponse{}
 	resp := &client.ActiveSeriesResponse{}
-	for _, matchers := range matchersSet {
-		for _, series := range i.timeseries {
-			if match(series.Labels, matchers) {
-				resp.Metric = append(resp.Metric, &mimirpb.Metric{Labels: series.Labels})
-			}
-			if len(resp.Metric) > 1 {
-				results = append(results, resp)
-				resp = &client.ActiveSeriesResponse{}
-			}
+
+	for _, series := range i.timeseries {
+		if match(series.Labels, matchers) {
+			resp.Metric = append(resp.Metric, &mimirpb.Metric{Labels: series.Labels})
 		}
-		if len(resp.Metric) > 0 {
+		if len(resp.Metric) > 1 {
 			results = append(results, resp)
+			resp = &client.ActiveSeriesResponse{}
 		}
+	}
+	if len(resp.Metric) > 0 {
+		results = append(results, resp)
 	}
 
 	return &activeSeriesStream{results: results}, nil

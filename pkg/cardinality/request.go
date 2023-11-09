@@ -266,59 +266,46 @@ func extractCountMethod(values url.Values) (countMethod CountMethod, err error) 
 }
 
 type ActiveSeriesRequest struct {
-	MatcherSet [][]*labels.Matcher
+	Matchers []*labels.Matcher
 }
 
+// DecodeActiveSeriesRequest decodes the input http.Request into an ActiveSeriesRequest.
 func DecodeActiveSeriesRequest(r *http.Request) (*ActiveSeriesRequest, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, err
-	}
-	if len(r.Form["match[]"]) == 0 {
-		return nil, errors.New("no match[] parameter provided")
 	}
 
 	return DecodeActiveSeriesRequestFromValues(r.Form)
 }
 
+// DecodeActiveSeriesRequestFromValues is like DecodeActiveSeriesRequest but takes an url.Values parameter.
 func DecodeActiveSeriesRequestFromValues(values url.Values) (*ActiveSeriesRequest, error) {
-	return parseMatchersParam(values["match[]"])
-}
+	var (
+		parsed = &ActiveSeriesRequest{}
+		err    error
+	)
 
-func parseMatchersParam(matchers []string) (*ActiveSeriesRequest, error) {
-	var matcherSet [][]*labels.Matcher
-	for _, s := range matchers {
-		matchers, err := parser.ParseMetricSelector(s)
-		if err != nil {
-			return nil, err
-		}
-		matcherSet = append(matcherSet, matchers)
+	if !values.Has("selector") {
+		return nil, fmt.Errorf("missing 'selector' parameter")
 	}
 
-OUTER:
-	for _, ms := range matcherSet {
-		for _, lm := range ms {
-			if lm != nil && !lm.Matches("") {
-				continue OUTER
-			}
-		}
-		return nil, errors.New("match[] must contain at least one non-empty matcher")
+	parsed.Matchers, err = extractSelector(values)
+	if err != nil {
+		return nil, err
 	}
 
-	return &ActiveSeriesRequest{MatcherSet: matcherSet}, nil
+	return parsed, nil
 }
 
-func (m *ActiveSeriesRequest) String() string {
+// String returns a string representation that uniquely identifies the request.
+func (r *ActiveSeriesRequest) String() string {
 	b := strings.Builder{}
 
-	for _, matchers := range m.MatcherSet {
-		// Add matchers.
-		for idx, matcher := range matchers {
-			if idx > 0 {
-				b.WriteRune(stringValueSeparator)
-			}
-			b.WriteString(matcher.String())
+	for idx, matcher := range r.Matchers {
+		if idx > 0 {
+			b.WriteRune(stringValueSeparator)
 		}
-		b.WriteRune(stringParamSeparator)
+		b.WriteString(matcher.String())
 	}
 
 	return b.String()

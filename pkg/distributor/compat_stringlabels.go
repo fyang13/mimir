@@ -10,7 +10,9 @@ import (
 	"github.com/grafana/mimir/pkg/mimirpb"
 )
 
+// mergeActiveSeriesResponses takes a set of responses from different ingesters and merges them into a single set.
 func mergeActiveSeriesResponses(responses [][]*mimirpb.Metric) []labels.Labels {
+	// Build a unique set of labels to eliminate duplicates across responses.
 	resultSet := make(map[labels.Labels]struct{})
 	for _, resp := range responses {
 		for _, series := range resp {
@@ -19,9 +21,11 @@ func mergeActiveSeriesResponses(responses [][]*mimirpb.Metric) []labels.Labels {
 		}
 	}
 
+	// Convert the set to a slice.
 	lbls := make([]labels.Labels, 0, len(resultSet))
 	for v := range resultSet {
 		lbls = append(lbls, v)
 	}
+
 	return lbls
 }
